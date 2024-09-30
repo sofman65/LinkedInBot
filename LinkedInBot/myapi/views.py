@@ -9,7 +9,12 @@ from django.conf import settings
 from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
+import logging
+from langchain_core.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain_community.llms import OpenAI
 
+logger = logging.getLogger(__name__)
 
 # Fetch all pending posts (to be approved/rejected)
 @api_view(['GET'])
@@ -98,7 +103,7 @@ def reject_post(request, post_id):
         return Response({'error': 'Post not found'}, status=404)
 
 
-# Endpoint to generate LinkedIn posts using AI (OpenAI)
+# LangChain function to generate LinkedIn posts
 @api_view(['POST'])
 def generate_linkedin_post(request):
     prompt = request.data.get('prompt', None)
@@ -106,27 +111,36 @@ def generate_linkedin_post(request):
     if not prompt:
         return Response({'error': 'No prompt provided'}, status=400)
     
-    openai.api_key = settings.OPENAI_API_KEY
     try:
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=prompt,
-            max_tokens=150,
-            temperature=0.7,
-            stream=True
-        )
-        post_content = response.choices[0].text.strip()
+        # Define a LangChain prompt template
+        template = """
+        Write a professional LinkedIn post based on the following prompt:
+        {prompt}
+        
+        The post should be concise, professional, and relevant to business professionals.
+        """
 
+        # Create the PromptTemplate instance
+        prompt_template = PromptTemplate(input_variables=["prompt"], template=template)
 
+        # Initialize LangChain's OpenAI LLM
+        llm = OpenAI(openai_api_key=settings.OPENAI_API_KEY, model="text-davinci-003", temperature=0.7)
 
-        # Create a PendingPost and save it to the database
-        user = request.user  # Assuming user is logged in
+        # Create the chain to link the LLM and prompt template
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+
+        # Generate the LinkedIn post using the prompt
+        post_content = chain.run({"prompt": prompt}).strip()
+
+        # Save the generated post as a pending post in the database
+        user = request.user  # Assuming the user is authenticated
         pending_post = PendingPost.objects.create(text=post_content, user=user)
 
         return Response({'post_content': post_content, 'status': 'Pending approval'}, status=200)
+    
     except Exception as e:
+        logger.error(f"Error generating LinkedIn post: {e}")
         return Response({'error': str(e)}, status=500)
-
 
 # Endpoint to post the generated content to LinkedIn
 @api_view(['POST'])
