@@ -9,7 +9,10 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
+import logging
+import os
+# Enable debug logging
+logging.basicConfig(level=logging.DEBUG)
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -31,6 +34,16 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+# Django default apps
+    'django.contrib.sites',  # This is required by allauth
+
+    # Django-allauth apps
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.linkedin_oauth2',  # Add this line for LinkedIn
+
+    # Django apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,8 +52,51 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'social_django',
     'myapi',
 ]
+
+SITE_ID = 1  # Ensure this is set
+
+SOCIAL_AUTH_LINKEDIN_OAUTH2_KEY = '771867qn4hv7ov'
+SOCIAL_AUTH_LINKEDIN_OAUTH2_SECRET = 'WPL_AP1.6TFtuhsuNM0LM6XN.xhEfVA=='
+
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/dashboard'
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/login-error'
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.linkedin.LinkedinOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+# Define the scopes you need (e.g., basic profile, email, posting)
+SOCIAL_AUTH_LINKEDIN_OAUTH2_SCOPE = ['openid', 'profile', 'email']
+
+SOCIALACCOUNT_PROVIDERS = {
+    'linkedin_oauth2': {
+        'SCOPE': ['r_liteprofile', 'r_emailaddress'],
+        'PROFILE_FIELDS': ['id', 'first-name', 'last-name', 'email-address', 'picture-url'],
+        'OAuth2': {
+            'CLIENT_ID': os.getenv('LINKEDIN_CLIENT_ID'),
+            'SECRET': os.getenv('LINKEDIN_CLIENT_SECRET'),
+        }
+    }
+}
+
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.social_user',
+    'allauth.account.middleware.AccountMiddleware',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'myapp.pipeline.save_profile',  # Custom pipeline step to save LinkedIn profile
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -52,6 +108,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'allauth.account.middleware.AccountMiddleware',  # Add this line
 ]
 
 CORS_ORIGIN_ALLOW_ALL = True
@@ -128,3 +185,5 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+SITE_ID = 1  # Ensure this is set
